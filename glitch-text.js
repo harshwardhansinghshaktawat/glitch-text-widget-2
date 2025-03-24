@@ -6,7 +6,10 @@ class GlitchText extends HTMLElement {
   }
 
   static get observedAttributes() {
-    return ['text', 'font-size', 'font-family', 'font-color', 'background-color', 'animation-speed'];
+    return [
+      'text', 'font-size', 'font-family', 'font-color', 'background-color', 
+      'animation-speed', 'heading-tag', 'secondary-glitch-color', 'background-opacity'
+    ];
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -46,7 +49,7 @@ class GlitchText extends HTMLElement {
     const splitedText = text.split(' ');
     let html = '';
     splitedText.forEach((word) => {
-      html += `<span class="animated-word" data-text="${word}"></span>&nbsp;`;
+      html += `<span class="animated-word" data-text="${word}"></span> `;
     });
     this.shadowRoot.querySelector('.animated-title').innerHTML = html;
     this.splitLetters();
@@ -79,8 +82,13 @@ class GlitchText extends HTMLElement {
     const fontColor = this.getAttribute('font-color') || '#FF00FF'; // Magenta
     const backgroundColor = this.getAttribute('background-color') || '#2A1B3D'; // Dark purple
     const animationSpeed = parseFloat(this.getAttribute('animation-speed')) || 10;
+    const headingTag = this.getAttribute('heading-tag') || 'p';
+    const secondaryGlitchColor = this.getAttribute('secondary-glitch-color') || '#00FF00'; // Lime green
+    const backgroundOpacity = parseFloat(this.getAttribute('background-opacity')) || 100; // 0-100
+    const bgOpacityValue = backgroundOpacity / 100; // Convert to 0-1
+    const bgColorWithOpacity = `${backgroundColor}${Math.round(bgOpacityValue * 255).toString(16).padStart(2, '0')}`; // Hex with alpha
 
-    this.isAnimating = false; // Reset on re-render
+    this.isAnimating = false;
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -92,7 +100,7 @@ class GlitchText extends HTMLElement {
           display: flex;
           justify-content: center;
           align-items: center;
-          background-color: ${backgroundColor};
+          background-color: ${bgColorWithOpacity};
           overflow: hidden;
         }
 
@@ -126,7 +134,6 @@ class GlitchText extends HTMLElement {
           letter-spacing: 1px;
         }
 
-        /* Generate random animation delays */
         ${Array.from({ length: 100 }, (_, i) => `
           .animate:nth-child(3n+${i + 1}) .animated-element {
             animation-delay: ${Math.random() * animationSpeed / 10}s;
@@ -141,7 +148,7 @@ class GlitchText extends HTMLElement {
           }
           10% {
             opacity: 1;
-            color: #00FF00; /* Lime green for glitch effect */
+            color: ${secondaryGlitchColor};
           }
           20% {
             opacity: 0;
@@ -150,7 +157,7 @@ class GlitchText extends HTMLElement {
           }
           50% {
             opacity: 1;
-            color: #006400; /* Dark green for glitch effect */
+            color: #006400; /* Dark green retained as tertiary */
             transform: translateY(1px);
           }
           60% {
@@ -186,7 +193,7 @@ class GlitchText extends HTMLElement {
           }
         }
       </style>
-      <p class="animated-title" aria-label="${text}"></p>
+      <${headingTag} class="animated-title" aria-label="${text}"></${headingTag}>
     `;
 
     this.splitWords(text);
