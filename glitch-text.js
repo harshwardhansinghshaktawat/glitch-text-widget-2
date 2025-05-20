@@ -3,17 +3,24 @@ class GlitchText extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this.isAnimating = false;
+    this.hasAnimated = false; // Track if the animation has ever run
   }
 
   static get observedAttributes() {
     return [
       'text', 'font-size', 'font-family', 'font-color', 'background-color', 
-      'animation-speed', 'heading-tag', 'secondary-glitch-color', 'background-opacity'
+      'animation-speed', 'heading-tag', 'secondary-glitch-color', 'background-opacity',
+      'replay-on-reentry' // New attribute to control whether animation replays when element re-enters viewport
     ];
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
     if (oldValue !== newValue) {
+      // If text changes, we should reset animation state
+      if (name === 'text') {
+        this.hasAnimated = false;
+        this.isAnimating = false;
+      }
       this.render();
     }
   }
@@ -33,16 +40,40 @@ class GlitchText extends HTMLElement {
   }
 
   setupIntersectionObserver() {
-    this.observer = new IntersectionObserver((entries, observer) => {
+    this.observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
+        // Start animation when element enters viewport
         if (entry.isIntersecting && !this.isAnimating) {
           this.isAnimating = true;
           this.animateWords();
-          observer.unobserve(this);
+          
+          // Check if we should replay animation on re-entry
+          const replayOnReentry = this.getAttribute('replay-on-reentry') === 'true';
+          if (!replayOnReentry) {
+            this.observer.unobserve(this);
+          }
+        } 
+        // Reset animation state when element exits viewport (if replay is enabled)
+        else if (!entry.isIntersecting && this.hasAnimated && this.getAttribute('replay-on-reentry') === 'true') {
+          this.resetAnimation();
         }
       });
-    }, { threshold: 0.1 });
+    }, { 
+      threshold: 0.1,
+      rootMargin: '0px 0px -10% 0px' // Trigger slightly before the element is fully visible
+    });
+    
+    // Start observing as soon as the element is connected
     this.observer.observe(this);
+  }
+
+  resetAnimation() {
+    this.isAnimating = false;
+    const animatedWords = this.shadowRoot.querySelectorAll('.animated-word');
+    animatedWords.forEach((word) => {
+      word.style.opacity = 0;
+      word.classList.remove('animate');
+    });
   }
 
   splitWords(text) {
@@ -73,6 +104,7 @@ class GlitchText extends HTMLElement {
       word.style.opacity = 1;
       word.classList.add('animate');
     });
+    this.hasAnimated = true; // Mark that animation has run at least once
   }
 
   render() {
@@ -88,6 +120,8 @@ class GlitchText extends HTMLElement {
     const bgOpacityValue = backgroundOpacity / 100; // Convert to 0-1
     const bgColorWithOpacity = `${backgroundColor}${Math.round(bgOpacityValue * 255).toString(16).padStart(2, '0')}`; // Hex with alpha
 
+    // Reset animation state on render
+    const wasAnimating = this.isAnimating;
     this.isAnimating = false;
 
     this.shadowRoot.innerHTML = `
@@ -121,6 +155,7 @@ class GlitchText extends HTMLElement {
 
         .animated-word {
           opacity: 0;
+          transition: opacity 0.3s ease;
         }
 
         .animate {
@@ -197,6 +232,18 @@ class GlitchText extends HTMLElement {
     `;
 
     this.splitWords(text);
+    
+    // Re-establish observation after render
+    if (this.observer) {
+      this.observer.disconnect();
+      this.setupIntersectionObserver();
+    }
+    
+    // If the element was animating before re-render, continue animating
+    if (wasAnimating) {
+      this.isAnimating = true;
+      this.animateWords();
+    }
   }
 }
 
